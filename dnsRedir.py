@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 A small DNS server that answers a small set of queries
-and proxies the rest through a ``real'' DNS server.
+and proxies the rest through a 'real' DNS server.
 
 See the documentation for more details.
 
@@ -9,7 +9,6 @@ NOTES:
   - no attempt is made to make IDs unguessable.  This is a security
     weakness that can be exploited in a hostile enviornment.
 TODO:
-  - Support IPv6 transport?
   - Support IPv6 queries?
 """
 
@@ -46,6 +45,7 @@ def pack(buf, fmt, *args) :
     buf.append(struct.pack(fmt, *args))
 
 def getLabel(buf, off, ctx) :
+    """Get a DNS label, without any decompression."""
     (b,),dummy = unpack('!B', buf, off)
     t = b >> 6
     if t == 0 : # len
@@ -60,6 +60,7 @@ def getLabel(buf, off, ctx) :
     return v,off2
 
 def getDomName(buf, off, ctx) :
+    """Get a domain name, performing decompression."""
     idx = off
     labs = []
     while True :
@@ -83,6 +84,7 @@ def getDomName(buf, off, ctx) :
     return ctx[idx],off
 
 def putDomain(buf, dom) :
+    """Put a domain name. Never compressed..."""
     labs = dom.rstrip('.').split('.')
     if len(dom) > 255 or any(len(l) > 63 or len(l) == 0 for l in labs) :
         raise Error("Cannot encode domain: %s" % dom)
@@ -91,7 +93,7 @@ def putDomain(buf, dom) :
         pack(buf, "!B", len(l))
         buf.append(l)
 
-class Question(object) :
+class DNSQuestion(object) :
     def get(self, buf, off, ctx) :
         self.name,off = getDomName(buf, off, ctx)
         (self.type,self.klass),off = unpack("!HH", buf, off)
@@ -112,9 +114,9 @@ class ResA(object) :
     def put(self, buf) :
         buf.append(parseIP(self.val))
     def __str__(self) :
-        return '[ResA %s]' % (self.val)
+        return '[A %s]' % (self.val)
 
-class ResRec(object) :
+class DNSResRec(object) :
     children = {
         A:      ResA,
         #CNAME:  ResCName,
@@ -150,9 +152,9 @@ class ResRec(object) :
 
     def __str__(self) :
         if self.val :
-            return '[ResRec %s %s %s %s %s]' % (self.name, self.type, self.klass, self.ttl, self.val)
+            return '[RR %s %s %s %s %s]' % (self.type, self.klass, self.ttl, self.name, self.val)
         else :
-            return '[ResRec %s %s %s %s %r]' % (self.name, self.type, self.klass, self.ttl, self.nested)
+            return '[RR %s %s %s %s %r]' % (self.type, self.klass, self.ttl, self.name, self.nested)
 
 def getArray(buf, off, cnt, constr, ctx) :
     objs = []
@@ -164,7 +166,6 @@ def getArray(buf, off, cnt, constr, ctx) :
 def putArray(buf, arr) :
     for obj in arr :
         obj.put(buf)
-
 def arrStr(xs) :
     return '[%s]' % (', '.join(str(x) for x in xs))
 
@@ -177,10 +178,10 @@ class DNSMsg(object) :
         self.id, bits, qdcount, ancount, nscount, arcount = struct.unpack("!HHHHHH", buf[:12])
         self.rcode, self.z, self.ra, self.rd, self.tc, self.aa, self.opcode, self.qr = getBits(bits, 4, 3, 1, 1, 1, 1, 4, 1)
         n = 12
-        self.qd,n = getArray(buf, n, qdcount, Question, ctx)
-        self.an,n = getArray(buf, n, ancount, ResRec, ctx)
-        self.ns,n = getArray(buf, n, nscount, ResRec, ctx)
-        self.ar,n = getArray(buf, n, arcount, ResRec, ctx)
+        self.qd,n = getArray(buf, n, qdcount, DNSQuestion, ctx)
+        self.an,n = getArray(buf, n, ancount, DNSResRec, ctx)
+        self.ns,n = getArray(buf, n, nscount, DNSResRec, ctx)
+        self.ar,n = getArray(buf, n, arcount, DNSResRec, ctx)
         if n < len(buf) :
             raise Error("unexpected slack data: %r" % buf[n:])
     def put(self) :
@@ -200,54 +201,13 @@ class DNSMsg(object) :
         arrs = 'qd=%s an=%s ns=%s ar=%s' % tuple(arrStr(x) for x in (self.qd,self.an,self.ns,self.ar))
         return '[DNSMsg id=%d rcode=%d z=%d ra=%d rd=%d tc=%d aa=%d opcode=%d qr=%d %s]' % (self.id, self.rcode, self.z, self.ra, self.rd, self.tc, self.aa, self.opcode, self.qr, arrs)
 
-def testParse() :
-    buf = '\x85%\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x03foo\x03bar\x00\x00\x01\x00\x01'
-    buf = '''da12 8180
-     0001 0008 0000 000a 0874 6865 6e65 7773
-     6803 636f 6d00 00ff 0001 c00c 0001 0001
-     0001 386a 0004 48eb c992 c00c 0002 0001
-     0001 50e7 000c 036e 7333 0268 6503 6e65
-     7400 c00c 0002 0001 0001 50e7 0006 036e
-     7332 c03e c00c 0002 0001 0001 50e7 0006
-     036e 7331 c03e c00c 0002 0001 0001 50e7
-     0006 036e 7334 c03e c00c 0002 0001 0001
-     50e7 0006 036e 7335 c03e c00c 0006 0001
-     0001 50e7 0023 c064 0a68 6f73 746d 6173
-     7465 72c0 3e77 fc96 1900 002a 3000 0007
-     0800 093a 8000 0151 80c0 0c00 0f00 0100
-     0150 e700 2700 0102 6d78 0874 6865 6e65
-     7773 6803 636f 6d04 6375 7374 0162 0b68
-     6f73 7465 6465 6d61 696c c015 c03a 0001
-     0001 0000 8abf 0004 d8da 8402 c03a 001c
-     0001 0000 167a 0010 2001 0470 0300 0000
-     0000 0000 0000 0002 c052 0001 0001 0000
-     1178 0004 d8da 8302 c052 001c 0001 0000
-     1677 0010 2001 0470 0200 0000 0000 0000
-     0000 0002 c064 0001 0001 0000 1a98 0004
-     d8da 8202 c076 0001 0001 0000 1677 0004
-     d842 0102 c076 001c 0001 0000 d5c1 0010
-     2001 0470 0400 0000 0000 0000 0000 0002
-     c088 0001 0001 0000 be49 0004 d842 5012
-     c088 001c 0001 0000 d5c1 0010 2001 0470
-     0500 0000 0000 0000 0000 0002 c0cb 0001
-     0001 0000 0d77 0004 4062 2404'''.replace('\n','').replace(' ','').decode('hex')
-
-    m = DNSMsg(buf)
-    print m
-
-    b = m.put()
-    print 'encoded:', b.encode('hex')
-    m2 = DNSMsg(b)
-    print 'decoded:', m2
-    return
-
 def findMatch(opt, ty, name) :
     for ty_,pat,val in opt.names :
         if ty == ty_ and re.match(pat, name) :
             return val
 
 def answer(q, val, ttl, id, opcode) :
-    a = ResRec()
+    a = DNSResRec()
     a.name = q.name
     a.type = q.type
     a.klass = q.klass
@@ -280,6 +240,7 @@ def procQuery(opt, s, m, peer) :
     return resp
 
 class Proxy(object) :
+    """Proxy objects and the global proxy table."""
     timeo = 30
     id = 1
     tab = {}
@@ -336,7 +297,16 @@ def procMsg(opt, s, buf, peer) :
             print "%s: unexpected response %d" % (peer, m.id)
 
 def server(opt) :
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
+    if opt.six :
+        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) 
+    else :
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
+        try :
+            # Handle both ipv4 and ipv6. 
+            # This is on by default on many but not all systems.
+            s.setsockopt(socket.IPPROTO_IPV6, IPV6_V6ONLY, 0)
+        except Exception, e :
+            pass
     s.bind((opt.bindAddr, opt.port))
     while 1 :
         buf,peer = s.recvfrom(64 * 1024)
@@ -360,9 +330,9 @@ def parseIP(xs) :
 def parseNames(args) :
     map = []
     for a in args :
-        ws = a.split("=")
+        ws = a.split(":")
         if len(ws) != 3 :
-            raise Error("Argument must be type=name=value: %r" % a)
+            raise Error("Argument must be type:name:value -- %r" % a)
         ty,nm,val = ws
         if ty == 'a' :
             dummy = parseIP(val)
@@ -374,9 +344,10 @@ def parseNames(args) :
 def getopts() :
     p = optparse.OptionParser(usage="usage: %prog [opts] [name=ip ...]")
     p.add_option('-d', dest='dnsServer', default=publicDNS, help='default DNS server')
+    p.add_option('-6', dest='six', action='store_true', help='Use IPv6 server socket')
     opt,args = p.parse_args()
     opt.names = parseNames(args)
-    opt.bindAddr = '0.0.0.0'
+    opt.bindAddr = '' # any, ipv4 or ipv6
     opt.port = 53
     opt.dnsServerPort = 53
     opt.ttl = 60
@@ -388,4 +359,3 @@ def main() :
 
 if __name__ == '__main__' :
     main()
-    #testParse()
