@@ -8,13 +8,15 @@ See the documentation for more details.
 NOTES:
   - no attempt is made to make IDs unguessable.  This is a security
     weakness that can be exploited in a hostile enviornment.
+  - will complain about slack data
 TODO:
-  - Support IPv6 queries?
+  - more record types: AAAA, PTR, TXT, ...
 """
 
 import optparse, re, socket, struct, time
 
 publicDNS = '8.8.8.8' # google's public DNS server
+publicDNS6 = '::ffff:' + publicDNS
 
 A,NS,CNAME,PTR,MX,TXT = 1,2,5,12,15,16
 IN = 1
@@ -104,7 +106,7 @@ class DNSQuestion(object) :
     def __str__(self) :
         return '[Quest %s %s %s]' % (self.name, self.type, self.klass)
 
-class ResA(object) :
+class DNSResA(object) :
     def __init__(self, val=None) :
         if val is not None :
             self.val = val
@@ -118,12 +120,12 @@ class ResA(object) :
 
 class DNSResRec(object) :
     children = {
-        A:      ResA,
-        #CNAME:  ResCName,
-        #MX:     ResMx,
-        #NS:     ResNs,
-        #PTR:    ResPtr,
-        #TXT:    ResTxt,
+        A:      DNSResA,
+        #CNAME:  DNSResCName,
+        #MX:     DNSResMx,
+        #NS:     DNSResNs,
+        #PTR:    DNSResPtr,
+        #TXT:    DNSResTxt,
     }
     def get(self, buf, off, ctx) :
         self.name,off = getDomName(buf, off, ctx)
@@ -236,7 +238,7 @@ def procQuery(opt, s, m, peer) :
         q = m.qd[0]
         ip = findMatch(opt, 'a', q.name)
         if ip :
-            resp = answer(q, ResA(ip), opt.ttl, m.id, m.opcode)
+            resp = answer(q, DNSResA(ip), opt.ttl, m.id, m.opcode)
     return resp
 
 class Proxy(object) :
@@ -267,7 +269,9 @@ class Proxy(object) :
                 del self.tab[k]
 
 def sendMsg(s, addr, msg) :
-    return s.sendto(msg.put(), addr)
+    buf = msg.put()
+    if s.sendto(buf, addr) != len(buf) :
+        raise Error("failure sending msg: " + e)
 
 def procMsg(opt, s, buf, peer) :
     Proxy.clean()
@@ -342,15 +346,17 @@ def parseNames(args) :
     return map
 
 def getopts() :
-    p = optparse.OptionParser(usage="usage: %prog [opts] [name=ip ...]")
-    p.add_option('-d', dest='dnsServer', default=publicDNS, help='default DNS server')
+    p = optparse.OptionParser(usage="usage: %prog [opts] [type:name:val ...]")
+    p.add_option('-d', dest='dnsServer', default=None, help='default DNS server. Default=' + publicDNS)
+    p.add_option('-b', dest='bindAddr', default='', help='Address to bind to. Default=any')
+    p.add_option('-p', dest='port', type=int, default=53, help='Port to listen on. Default=53')
+    p.add_option('-P', dest='dnsServerPort', type=int, default=53, help='Port of default DNS server. Default=53')
+    p.add_option('-t', dest='ttl', type=int, default=60, help='TTL for responses. Default=60 seconds')
     p.add_option('-6', dest='six', action='store_true', help='Use IPv6 server socket')
     opt,args = p.parse_args()
     opt.names = parseNames(args)
-    opt.bindAddr = '' # any, ipv4 or ipv6
-    opt.port = 53
-    opt.dnsServerPort = 53
-    opt.ttl = 60
+    if opt.dnsServer == None :
+        opt.dnsServer = publicDNS6 if opt.six else publicDNS
     return opt
 
 def main() :
