@@ -13,7 +13,7 @@ TODO:
   - Support IPv6 queries?
 """
 
-import optparse, socket, struct, time
+import optparse, re, socket, struct, time
 
 publicDNS = '8.8.8.8' # google's public DNS server
 
@@ -246,24 +246,25 @@ def findMatch(opt, ty, name) :
         if ty == ty_ and re.match(pat, name) :
             return val
 
-def answer(q, val) :
+def answer(q, val, ttl, id, opcode) :
     a = ResRec()
     a.name = q.name
     a.type = q.type
     a.klass = q.klass
-    a.ttl = opt.ttl
+    a.ttl = ttl
     a.val = val
     
     resp = DNSMsg()
+    resp.id = id
     resp.qr = 1
-    resp.opcode = q.opcode
+    resp.opcode = opcode
     resp.aa = 0
     resp.tc = 0
     resp.rd = 0
     resp.ra = 0
     resp.z = 0
     resp.rcode = 0
-    res.qd = [q]
+    resp.qd = [q]
     resp.an = [a]
     resp.ns = []
     resp.ar = []
@@ -275,7 +276,7 @@ def procQuery(opt, s, m, peer) :
         q = m.qd[0]
         ip = findMatch(opt, 'a', q.name)
         if ip :
-            resp = answer(q, ResA(ip))
+            resp = answer(q, ResA(ip), opt.ttl, m.id, m.opcode)
     return resp
 
 class Proxy(object) :
