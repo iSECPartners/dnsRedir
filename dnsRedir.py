@@ -186,7 +186,7 @@ class DNSMsg(object) :
             raise Error("unexpected slack data: %r" % buf[n:])
     def put(self) :
         buf = []
-        bits = putBits((4,3,1,1,1,1,1,1,4,1), self.rcode, self.z, self.ra, self.rd, self.tc, self.aa, self.opcode, self.qr)
+        bits = putBits((4, 3, 1, 1, 1, 1, 4, 1), self.rcode, self.z, self.ra, self.rd, self.tc, self.aa, self.opcode, self.qr)
         pack(buf, "!HHHHHH", self.id, bits, len(self.qd), len(self.an), len(self.ns), len(self.ar))
         putArray(buf, self.qd)
         putArray(buf, self.an)

@@ -2,6 +2,13 @@
 
 from dnsRedir import *
 
+def testBits() :
+    for n in xrange(256) :
+        a,b,c,d = getBits(n, 1,2,2,3)
+        n2 = putBits((1,2,2,3), a,b,c,d)
+        if n != n2 :
+            print n, n2, a,b,c,d
+
 def testParse() :
     buf = '\x85%\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x03foo\x03bar\x00\x00\x01\x00\x01'
     buf = '''da12 8180
@@ -35,13 +42,19 @@ def testParse() :
      0001 0000 0d77 0004 4062 2404'''.replace('\n','').replace(' ','').decode('hex')
 
     m = DNSMsg(buf)
+    s1 = str(m)
     print m
 
     b = m.put()
     print 'encoded:', b.encode('hex')
     m2 = DNSMsg(b)
+    s2 = str(m2)
     print 'decoded:', m2
+    print 'same?', s1 == s2
+    #for n,(x1,x2) in enumerate(zip(s1, s2)) :
+    #    print n, x1, x2, x1 == x2
     return
 
 if __name__ == '__main__' :
+    testBits()
     testParse()
