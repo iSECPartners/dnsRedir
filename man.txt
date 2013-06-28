@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
     dnsRedir.py [opts] [type:name:value ...]
-    opts: [-6] [-b bindaddr] [-p port] [-d dnssrever] [-P dnsport] [-t ttl]
+    opts: [-6q] [-b bindaddr] [-p port] [-d dnssrever] [-P dnsport] [-t ttl]
 
 DESCRIPTION
     dnsRedir.py is a small DNS server that can answer some requests 
@@ -30,7 +30,7 @@ DESCRIPTION
 
     All names are checked in order and the value associated with the
     first matching pattern is used in creating a response.  All
-    responses are sent with a TTL of 30 seconds, which can be overriden
+    responses are sent with a TTL of 30 seconds, which can be overridden
     with the 't' option.
 
     When the '6' option is specified, the server listens to requests
@@ -40,6 +40,8 @@ DESCRIPTION
     must be a valid IPv6 address when using this option. To use an
     IPv4 DNS server, it must be specified in IPv6 format such as
     "::ffff:127.0.0.1".
+
+    When the 'q' option is specified, logging output is suppressed.
 
 EXAMPLES
     The following command causes the server to listen on port 1053 and
