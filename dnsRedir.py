@@ -378,7 +378,7 @@ def getopts() :
         opt.dnsServer = publicDNS6 if opt.six else publicDNS
     opt.srv = opt.dnsServer, opt.dnsServerPort
     global gQuiet
-    quiet = opt.quiet
+    gQuiet = opt.quiet
     return opt
 
 def main() :
