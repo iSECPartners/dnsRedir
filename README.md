@@ -3,7 +3,7 @@ dnsRedir
 A small command-line DNS server written in Python.
 
 - Tim Newsham < tim at isecpartners dot com >
-- 27 Jun 2013
+- 28 Jun 2013
 
 
 Overview
