@@ -18,11 +18,17 @@ import optparse, re, socket, struct, time
 publicDNS = '8.8.8.8' # google's public DNS server
 publicDNS6 = '::ffff:' + publicDNS
 
-A,NS,CNAME,PTR,MX,TXT = 1,2,5,12,15,16
+QUERY,IQUERY = 0,1
 IN = 1
+A,NS,CNAME,PTR,MX,TXT = 1,2,5,12,15,16
 
 class Error(Exception) :
     pass
+
+def log(fmt, *args) :
+    now = time.time()
+    ts = time.strftime('%Y-%m-%d:%H:%M:%S', time.localtime(now))
+    print ts, fmt % args
 
 def getBits(num, *szs) :
     rs = []
@@ -173,6 +179,10 @@ def arrStr(xs) :
 
 class DNSMsg(object) :
     def __init__(self, buf=None) :
+        self.id = 0
+        self.rcode, self.z, self.ra, self.rd, self.tc, self.aa, self.opcode, self.qr = 0, 0, 0, 0, 0, 0, 0, 0
+        self.qd, self.an, self.ns, self.ar = [],[],[],[]
+
         if buf is not None :
             self.get(buf)
     def get(self, buf) :
@@ -205,40 +215,32 @@ class DNSMsg(object) :
 
 def findMatch(opt, ty, name) :
     for ty_,pat,val in opt.names :
+        print pat, name, re.match(pat, name)
         if ty == ty_ and re.match(pat, name) :
             return val
 
 def answer(q, val, ttl, id, opcode) :
     a = DNSResRec()
-    a.name = q.name
-    a.type = q.type
-    a.klass = q.klass
-    a.ttl = ttl
-    a.val = val
+    a.name, a.type, a.klass = q.name, q.type, q.klass
+    a.ttl, a.val = ttl, val
     
     resp = DNSMsg()
     resp.id = id
     resp.qr = 1
     resp.opcode = opcode
-    resp.aa = 0
-    resp.tc = 0
-    resp.rd = 0
-    resp.ra = 0
-    resp.z = 0
-    resp.rcode = 0
     resp.qd = [q]
     resp.an = [a]
-    resp.ns = []
-    resp.ar = []
     return resp
 
 def procQuery(opt, s, m, peer) :
     resp = None
-    if m.opcode == 0 and len(m.qd) == 1 and m.qd[0].type == A and m.qd[0].klass == IN :
+    if m.opcode == QUERY and len(m.qd) == 1 :
         q = m.qd[0]
-        ip = findMatch(opt, 'a', q.name)
-        if ip :
-            resp = answer(q, DNSResA(ip), opt.ttl, m.id, m.opcode)
+        if q.klass == IN and q.type == A :
+            ip = findMatch(opt, 'A', q.name)
+            if ip :
+                log("Answering %s/%d query IN A %s with %s", peer, m.id, q.name, ip)
+                resp = answer(q, DNSResA(ip), opt.ttl, m.id, m.opcode)
     return resp
 
 class Proxy(object) :
@@ -265,7 +267,7 @@ class Proxy(object) :
         now = time.time()
         for k,v in self.tab.items() :
             if v.expire <= now :
-                print 'expire', k
+                log("expire proxy request %d", k)
                 del self.tab[k]
 
 def sendMsg(s, addr, msg) :
@@ -277,28 +279,31 @@ def procMsg(opt, s, buf, peer) :
     Proxy.clean()
 
     m = DNSMsg()
-    m.get(buf)
+    try :
+        m.get(buf)
+    except Error, e :
+        log("Error parsing msg from %s: %s", peer, e)
+        return
     resp = None
     if m.qr == 0 : # query from client - answer it or proxy it
         resp = procQuery(opt, s, m, peer)
         if resp is not None : 
-            print "send answer to", peer
+            log("Send answer to %s", peer)
             sendMsg(s, peer, resp)
         else : # not processed, proxy it
             p = Proxy(peer, m)
+            log("Proxy msg from client %s/%d to server %s/%d", peer, m.id, opt.srv, p.id)
             m.id = p.id
-            print "proxy msg to server from", peer
-            srv = opt.dnsServer, opt.dnsServerPort
-            sendMsg(s, srv, m)
+            sendMsg(s, opt.srv, m)
     else : # response from server - proxy back to client
         p = Proxy.tab.get(m.id)
         if p is not None :
             del Proxy.tab[m.id]
+            log("Proxy msg from server %s/%d to client %s/%d", peer, m.id, p.peer, p.origId)
             m.id = p.origId
-            print "proxy msg from server %s to client %s" % (peer, p.peer)
             sendMsg(s, p.peer, m)
         else : 
-            print "%s: unexpected response %d" % (peer, m.id)
+            log("Unexpected response from %s/%d", peer, m.id)
 
 def server(opt) :
     if opt.six :
@@ -314,11 +319,11 @@ def server(opt) :
     s.bind((opt.bindAddr, opt.port))
     while 1 :
         buf,peer = s.recvfrom(64 * 1024)
-        print 'received %d from %s' % (len(buf), peer)
+        log("Received %d bytes from %s", len(buf), peer)
         try :
             procMsg(opt, s, buf, peer)
         except Error,e :
-            print 'error:', e
+            log("Error processing from %s", peer)
 
 def mkIP(xs) :
     return '.'.join('%d' % ord(x) for x in xs)
@@ -338,7 +343,8 @@ def parseNames(args) :
         if len(ws) != 3 :
             raise Error("Argument must be type:name:value -- %r" % a)
         ty,nm,val = ws
-        if ty == 'a' :
+        nm = '^' + nm + '$'
+        if ty == 'A' :
             dummy = parseIP(val)
         else :
             raise Error("Unsupported query type %r in %r" % (ty, a))
@@ -351,12 +357,13 @@ def getopts() :
     p.add_option('-b', dest='bindAddr', default='', help='Address to bind to. Default=any')
     p.add_option('-p', dest='port', type=int, default=53, help='Port to listen on. Default=53')
     p.add_option('-P', dest='dnsServerPort', type=int, default=53, help='Port of default DNS server. Default=53')
-    p.add_option('-t', dest='ttl', type=int, default=60, help='TTL for responses. Default=60 seconds')
+    p.add_option('-t', dest='ttl', type=int, default=30, help='TTL for responses. Default=30 seconds')
     p.add_option('-6', dest='six', action='store_true', help='Use IPv6 server socket')
     opt,args = p.parse_args()
     opt.names = parseNames(args)
     if opt.dnsServer == None :
         opt.dnsServer = publicDNS6 if opt.six else publicDNS
+    opt.srv = opt.dnsServer, opt.dnsServerPort
     return opt
 
 def main() :
