@@ -16,7 +16,7 @@ DESCRIPTION
     specified by the 'd' and 'P' options (defaulting to "8.8.8.8" port 53).
 
     The command arguments provide a list of DNS queries and their answer. 
-    Each argument is of the form "type:name:value". The type specifies 
+    Each argument is of the form "type:name=value". The type specifies 
     a supported DNS query type such as "A" for address lookups.
     The name specifies a regular expression used to match incoming
     domain name queries. The pattern must match the entire query,
@@ -55,7 +55,7 @@ EXAMPLES
     dots are escaped so that they are matched literally and not treated
     as a regular expression wildcards:
 
-       $ ./dnsRedir.py 'A:www\.evil\.com\.:1.2.3.4'
+       $ ./dnsRedir.py 'A:www\.evil\.com\.=1.2.3.4'
 
     The following command causes the server to respond to address queries
     for any host in "evil.com" with the address "1.2.3.4", address queries
@@ -66,7 +66,7 @@ EXAMPLES
     when using the '-6' option:
     
        $ ./dnsRedir.py -6 -d ::ffff:72.235.80.12 \
-                       'A:.*\.evil\.com\.:1.2.3.4' 'A:.*magic.*:1.2.3.5'
+                       'A:.*\.evil\.com\.=1.2.3.4' 'A:.*magic.*=1.2.3.5'
 
 
 BUGS

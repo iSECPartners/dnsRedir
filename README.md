@@ -23,7 +23,7 @@ Similar programs:
 QUICKSTART
 =======
 - Run the server
-  - $ ./dnsRedir.py -p 1053 'A:www\.evil\.com\.:1.2.3.4'
+  - $ ./dnsRedir.py -p 1053 'A:www\.evil\.com\.=1.2.3.4'
 
 - Now query it
   - $ dig -p 1053 www.evil.com @localhost
