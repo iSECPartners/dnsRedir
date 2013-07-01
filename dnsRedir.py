@@ -344,6 +344,45 @@ def parseIPv4(s) :
     except :
         raise Error("Bad IP address format: %r" % s)
 
+def mkHex16(buf) :
+    return '%x' % ((ord(buf[0]) << 8) | ord(buf[1]))
+def parseHex16(n) :
+    return chr((n >> 8) & 0xff) + chr(n & 0xff)
+def mkIPv6(bs) :
+    assert len(bs) == 16
+    ns = [mkHex16(bs[n:n+2]) for n in xrange(0,16,2)]
+    return ':'.join(ns)
+def parseIPv6(s) :
+    try :
+        ws = s.split(':')
+        if '.' in ws[-1] : # 32-bit IPv4 instead 16-bit hex
+            bs = parseIPv4(ws[-1])
+            ws[-1:] = [mkHex16(bs), mkHex16(bs[2:])]
+       
+        if '' in ws :
+            idx = ws.index('')
+            n = 8 - (len(ws) - 1)
+            if n > 0 : # expand at idx to full width
+                ws[idx : idx+1] = ['0'] * n
+
+            while '' in ws : # all others become zeros without expansion
+                ws[ws.index('')] = '0'
+
+        if len(ws) != 8 :
+            raise Error("wrong length") # jump to err
+        try :
+            ns = [int(w, 16) for w in ws]
+        except ValueError, e :
+            raise Error("bad hex")
+
+        if any(n < 0 or n > 0xffff for n in ns) :
+            raise Error("bad value")
+
+        return ''.join(parseHex16(n) for n in ns)
+    except Error, e :
+        print e
+        raise Error("Invalid IPv6 address: %r" % s)
+
 def parseNames(args) :
     tab = []
     for a in args :
