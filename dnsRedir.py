@@ -11,7 +11,7 @@ NOTES:
   - will complain about slack data
 
 TODO:
-  - more record types if needed: AAAA, PTR, TXT, ...
+  - more record types if needed: PTR, TXT, ...
 """
 
 import optparse, re, socket, struct, time
@@ -22,7 +22,7 @@ gQuiet = False
 
 QUERY,IQUERY = 0,1
 IN = 1
-A,NS,CNAME,PTR,MX,TXT = 1,2,5,12,15,16
+A,NS,CNAME,PTR,MX,TXT,AAAA = 1,2,5,12,15,16,28
 LABLEN,LABOFF = 0,3
 
 class Error(Exception) :
@@ -132,9 +132,22 @@ class DNSResA(object) :
     def __str__(self) :
         return '[A %s]' % (self.val)
 
+class DNSResAAAA(object) :
+    def __init__(self, val=None) :
+        if val is not None :
+            self.val = val
+    def get(self, buf, off) :
+        self.val = mkIPv6(buf[off : off+16])
+        return off+16
+    def put(self, buf) :
+        buf.append(parseIPv6(self.val))
+    def __str__(self) :
+        return '[AAAA %s]' % (self.val)
+
 class DNSResRec(object) :
     children = {
         A:      DNSResA,
+        AAAA:   DNSResA,
         #CNAME:  DNSResCName,
         #MX:     DNSResMx,
         #NS:     DNSResNs,
@@ -244,11 +257,17 @@ def procQuery(opt, s, m, peer) :
     resp = None
     if m.opcode == QUERY and len(m.qd) == 1 :
         q = m.qd[0]
+        log("Simple query from %s class=%d type=%d name=%r", peer, q.klass, q.type, q.name)
         if q.klass == IN and q.type == A :
             ip = lookup(opt.names, 'A', q.name)
             if ip :
                 log("Answering %s/%d query IN A %s with %s", peer, m.id, q.name, ip)
                 resp = mkResp(q, DNSResA(ip), opt.ttl, m.id, m.opcode)
+        if q.klass == IN and q.type == AAAA :
+            ip = lookup(opt.names, 'AAAA', q.name)
+            if ip :
+                log("Answering %s/%d query IN AAAA %s with %s", peer, m.id, q.name, ip)
+                resp = mkResp(q, DNSResAAAA(ip), opt.ttl, m.id, m.opcode)
     return resp
 
 class Proxy(object) :
@@ -386,16 +405,21 @@ def parseIPv6(s) :
 def parseNames(args) :
     tab = []
     for a in args :
-        ws = a.split(":")
-        if len(ws) != 3 :
-            raise Error("Argument must be type:name:value -- %r" % a)
-        ty,nm,val = ws
-        nm = '^' + nm + '$'
+        if ':' not in a :
+            raise Error("Argument must be type:name=value -- %r" % a)
+        ty,rest = a.split(':', 1)
+        if '=' not in rest :
+            raise Error("Argument must be type:name=value -- %r" % a)
+        nm,val = rest.split('=', 1)
+
+        pat = '^' + nm + '$' # anchor regexp
         if ty == 'A' :
             dummy = parseIPv4(val)
+        elif ty == 'AAAA' :
+            dummy = parseIPv6(val)
         else :
             raise Error("Unsupported query type %r in %r" % (ty, a))
-        tab.append((ty,nm,val))
+        tab.append((ty,pat,val))
     return tab
 
 def getopts() :
