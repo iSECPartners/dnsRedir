@@ -125,10 +125,10 @@ class DNSResA(object) :
         if val is not None :
             self.val = val
     def get(self, buf, off) :
-        self.val = mkIP(buf[off : off+4])
+        self.val = mkIPv4(buf[off : off+4])
         return off+4
     def put(self, buf) :
-        buf.append(parseIP(self.val))
+        buf.append(parseIPv4(self.val))
     def __str__(self) :
         return '[A %s]' % (self.val)
 
@@ -336,17 +336,13 @@ def server(opt) :
         except Error,e :
             log("Error processing from %s", peer)
 
-def mkIP(xs) :
-    assert len(xs) == 4
-    return '.'.join('%d' % ord(x) for x in xs)
-def parseIP(xs) :
+def mkIPv4(xs) :
+    return socket.inet_ntoa(xs)
+def parseIPv4(s) :
     try :
-        a,b,c,d = map(int, xs.split('.'))
-        if any(x < 0 or x > 255 for x in (a,b,c,d)) :
-            raise Error("jump to handler below")
-        return ''.join(chr(x) for x in (a,b,c,d))
+        return socket.inet_aton(s)
     except :
-        raise Error("Bad IP address format: %r" % xs)
+        raise Error("Bad IP address format: %r" % s)
 
 def parseNames(args) :
     tab = []
@@ -357,7 +353,7 @@ def parseNames(args) :
         ty,nm,val = ws
         nm = '^' + nm + '$'
         if ty == 'A' :
-            dummy = parseIP(val)
+            dummy = parseIPv4(val)
         else :
             raise Error("Unsupported query type %r in %r" % (ty, a))
         tab.append((ty,nm,val))
