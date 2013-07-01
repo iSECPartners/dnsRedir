@@ -147,7 +147,7 @@ class DNSResAAAA(object) :
 class DNSResRec(object) :
     children = {
         A:      DNSResA,
-        AAAA:   DNSResA,
+        AAAA:   DNSResAAAA,
         #CNAME:  DNSResCName,
         #MX:     DNSResMx,
         #NS:     DNSResNs,
@@ -165,7 +165,7 @@ class DNSResRec(object) :
             self.val = self.children[self.type]()
             n = self.val.get(self.nested, 0)
             if n != len(self.nested) :
-                raise Error("unexpected slack data: %r" % self.nested[n:])
+                raise Error("unexpected nested slack data: %r" % self.nested[n:])
         return off 
 
     def put(self, buf) :
@@ -399,7 +399,6 @@ def parseIPv6(s) :
 
         return ''.join(parseHex16(n) for n in ns)
     except Error, e :
-        print e
         raise Error("Invalid IPv6 address: %r" % s)
 
 def parseNames(args) :

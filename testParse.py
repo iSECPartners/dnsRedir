@@ -9,8 +9,28 @@ def testBits() :
         if n != n2 :
             print n, n2, a,b,c,d
 
-def testParse() :
+def testParse(buf) :
+    m = DNSMsg(buf)
+    s1 = str(m)
+    print m
+
+    b = m.put()
+    print 'encoded:', b.encode('hex')
+    m2 = DNSMsg(b)
+    s2 = str(m2)
+    print 'decoded:', m2
+    print 'same?', s1 == s2
+    #for n,(x1,x2) in enumerate(zip(s1, s2)) :
+    #    print n, x1, x2, x1 == x2
+    return
+
+def testParses() :
+    print 'simple query'
     buf = '\x85%\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x03www\x03foo\x03bar\x00\x00\x01\x00\x01'
+    testParse(buf)
+
+    print
+    print 'complex response'
     buf = '''da12 8180
      0001 0008 0000 000a 0874 6865 6e65 7773
      6803 636f 6d00 00ff 0001 c00c 0001 0001
@@ -40,21 +60,13 @@ def testParse() :
      c088 001c 0001 0000 d5c1 0010 2001 0470
      0500 0000 0000 0000 0000 0002 c0cb 0001
      0001 0000 0d77 0004 4062 2404'''.replace('\n','').replace(' ','').decode('hex')
+    testParse(buf)
 
-    m = DNSMsg(buf)
-    s1 = str(m)
-    print m
-
-    b = m.put()
-    print 'encoded:', b.encode('hex')
-    m2 = DNSMsg(b)
-    s2 = str(m2)
-    print 'decoded:', m2
-    print 'same?', s1 == s2
-    #for n,(x1,x2) in enumerate(zip(s1, s2)) :
-    #    print n, x1, x2, x1 == x2
-    return
+    print
+    print 'ipv6 response'
+    buf = '\x00\x01\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x06google\x03com\x00\x00\x1c\x00\x01\xc0\x0c\x00\x1c\x00\x01\x00\x00\x00\xc1\x00\x10 \x01H`@\x07\x08\x01\x00\x00\x00\x00\x00\x00\x10\x13'
+    testParse(buf)
 
 if __name__ == '__main__' :
     testBits()
-    testParse()
+    testParses()
