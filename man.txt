@@ -25,8 +25,13 @@ DESCRIPTION
     the type and name. The format for the value varies and depends on 
     the type.  The following query types are supported by dnsRedir.py:
 
-        A   - Address lookups. The value must be an IP address
+        A   - IPv4 address lookups. The value must be an IP address
               in dotted-quad format.
+        AAAA - IPv6 address lookups. The value must be an IPv6 address
+              in colon-separated hex form. Double colons can be
+              used to compress a sequence of zeros and IPv4 addresses
+              may be used as the last subword. For example:
+              "1234:0:0:0:0:0:0:1", "1234::1", "::1" or "::ffff:8.8.8.8".
 
     All names are checked in order and the value associated with the
     first matching pattern is used in creating a response.  All
