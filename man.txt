@@ -3,7 +3,7 @@ NAME
 
 SYNOPSIS
     dnsRedir.py [opts] [type:name:value ...]
-    opts: [-6q] [-b bindaddr] [-p port] [-d dnssrever] [-P dnsport] [-t ttl]
+    opts: [-6q] [-b bindaddr] [-p port] [-d dnsserver] [-P dnsport] [-t ttl]
 
 DESCRIPTION
     dnsRedir.py is a small DNS server that can answer some requests 
