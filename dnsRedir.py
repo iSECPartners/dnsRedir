@@ -102,8 +102,10 @@ def getDomName(buf, off, ctx) :
 def putDomain(buf, dom) :
     """Put a domain name. Never compressed..."""
     labs = dom.rstrip('.').split('.')
+    if len(labs) > 0 and labs[-1] == '' :
+        labs.pop()
     if len(dom) > 255 or any(len(l) > 63 or len(l) == 0 for l in labs) :
-        raise Error("Cannot encode domain: %s" % dom)
+        raise Error("Cannot encode domain: '%s'" % dom)
     labs.append('') # terminator
     for l in labs :
         putPacked(buf, "!B", len(l))
@@ -324,6 +326,7 @@ def procMsg(opt, sock, buf, peer) :
             p = Proxy(peer, m)
             log("Proxy msg from client %s/%d to server %s/%d", peer, m.id, opt.srv, p.id)
             m.id = p.id
+            print m
             sendMsg(sock, opt.srv, m)
     else : # response from server - proxy back to client
         p = Proxy.tab.get(m.id)
@@ -353,7 +356,7 @@ def server(opt) :
         try :
             procMsg(opt, s, buf, peer)
         except Error,e :
-            log("Error processing from %s", peer)
+            log("Error processing from %s: %s", peer, e)
 
 def mkIPv4(xs) :
     return socket.inet_ntoa(xs)
@@ -422,7 +425,7 @@ def parseNames(args) :
     return tab
 
 def getopts() :
-    p = optparse.OptionParser(usage="usage: %prog [opts] [type:name:val ...]")
+    p = optparse.OptionParser(usage="usage: %prog [opts] [type:name=val ...]")
     p.add_option('-d', dest='dnsServer', default=None, help='default DNS server. Default=' + publicDNS)
     p.add_option('-b', dest='bindAddr', default='', help='Address to bind to. Default=any')
     p.add_option('-p', dest='port', type=int, default=53, help='Port to listen on. Default=53')
