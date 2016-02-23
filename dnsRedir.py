@@ -414,6 +414,8 @@ def parseNames(args) :
             raise Error("Argument must be type:name=value -- %r" % a)
         nm,val = rest.split('=', 1)
 
+        if not nm.endswith('.') :
+            log("Warning: your name doesn't end with a trailing dot. This is a common mistake that can lead to your domain name not matching.")
         pat = '^' + nm + '$' # anchor regexp
         if ty == 'A' :
             dummy = parseIPv4(val)
